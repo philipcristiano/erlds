@@ -41,26 +41,20 @@ jobs:
         COVER: "1"
       run: |
         make test
-
-        mkdir -p cover
-        # Covert coverage data to XML
-        ./bin/covertool -cover _build/test/cover/ct.coverdata -output cover/cover.ct.xml
-        ./bin/covertool -cover _build/test/cover/eunit.coverdata -output cover/cover.eunit.xml
+        ./rebar3 codecov analyze path="_build/test/cover"
 
 
     - name: Upload eunit test coverage data to CodeCov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         name: eunit
-        file: "./cover/cover.eunit.xml"
 
-    - name: Upload eunit test coverage data to CodeCov
-      uses: codecov/codecov-action@v1
+    - name: Upload CT test coverage data to CodeCov
+      uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         name: ct
-        file: "./cover/cover.ct.xml"
 
   lint:
     runs-on: ubuntu-latest
