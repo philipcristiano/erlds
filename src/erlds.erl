@@ -50,7 +50,7 @@ delete_item(Path) ->
     }),
     Mutation = #{delete => Key},
 
-    case bizops_ds_lib:mutate([Mutation]) of
+    case erlds_lib:mutate([Mutation]) of
         {ok, _} -> ok
     end.
 
@@ -74,7 +74,7 @@ put_item(Path, Values, #{mutation := Mut}) ->
     Entity = #{key => Key, properties => Props},
     Mutation = #{Mut => Entity},
 
-    case bizops_ds_lib:mutate([Mutation]) of
+    case erlds_lib:mutate([Mutation]) of
         {ok, _} -> ok;
         {error, #{status := 409}} -> {error, already_exists}
     end.
@@ -87,7 +87,7 @@ batch_get_items(Paths) ->
     }),
     LookupRequest = #{keys => Keys},
 
-    case bizops_ds_lib:lookup(LookupRequest) of
+    case erlds_lib:lookup(LookupRequest) of
         {ok, LookupResponse} -> lookup_resp_to_obj(LookupResponse)
     end.
 
@@ -111,7 +111,7 @@ query_kind_by_ancestor(Kind, AncestorKey, _Limit) ->
     Args = #{<<"org_key">> => AncestorKey, limit => 50},
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = bizops_ds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];
@@ -151,7 +151,7 @@ query_kind_by_ancestor_and_properties(Kind, AncestorKey, Properties, _Limit) ->
 
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = bizops_ds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];
@@ -176,7 +176,7 @@ query_kind_by_properties(Kind, Properties, Limit) ->
 
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = bizops_ds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];

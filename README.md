@@ -1,9 +1,16 @@
-erlds
-=====
+# erlds
 
-An OTP library
+An OTP library wrapper for GCP Datastore.
 
-Build
------
+## Build
 
     $ ./rebar3 compile
+
+
+## Configuration
+
+### Environment variables
+* `GCP_PROJECT_ID` - the project ID
+
+
+

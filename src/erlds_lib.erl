@@ -31,7 +31,7 @@
 
 mutate(Mutations) when is_list(Mutations) ->
     Conn = get_connection(),
-    ProjectID = bizops_config:gcp_project_id(),
+    ProjectID = erlds_config:gcp_project_id(),
     {ok, #{transaction := TID}} = ?GOOGLE_API:datastore_projects_begin_transaction(
         Conn, ProjectID, [], []
     ),
@@ -43,7 +43,7 @@ mutate(Mutations) when is_list(Mutations) ->
 
 lookup(LookupRequest) ->
     Conn = get_connection(),
-    ProjectID = bizops_config:gcp_project_id(),
+    ProjectID = erlds_config:gcp_project_id(),
 
     ?with_span(<<"lookup">>, ?ATTR, fun(_Ctx) ->
         ?GOOGLE_API:datastore_projects_lookup(Conn, ProjectID, [{body, LookupRequest}], [])
@@ -59,7 +59,7 @@ query(Query, NamedBindings) ->
     }),
 
     Conn = get_connection(),
-    ProjectID = bizops_config:gcp_project_id(),
+    ProjectID = erlds_config:gcp_project_id(),
 
     ?with_span(<<"datastore_projects_run_query">>, ?ATTR, fun(_Ctx) ->
         {ok, #{
