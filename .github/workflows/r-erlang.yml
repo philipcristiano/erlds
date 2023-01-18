@@ -1,0 +1,93 @@
+name: Erlang Test and lint
+
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+env:
+  MIX_REBAR: ./rebar3
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: elixir:1.14.2
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cache/rebar3
+          _build
+        key: ${{ runner.os }}-erlang-${{ env.OTP_VERSION }}-${{ hashFiles('**/*rebar.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-erlang-${{ env.OTP_VERSION }}-
+
+    - name: Compile
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        make compile
+      env:
+        GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+    - name: Run tests
+      env:
+        COVER: "1"
+      run: |
+        make test
+
+        mkdir -p cover
+        # Covert coverage data to XML
+        ./bin/covertool -cover _build/test/cover/ct.coverdata -output cover/cover.ct.xml
+        ./bin/covertool -cover _build/test/cover/eunit.coverdata -output cover/cover.eunit.xml
+
+
+    - name: Upload eunit test coverage data to CodeCov
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        name: eunit
+        file: "./cover/cover.eunit.xml"
+
+    - name: Upload eunit test coverage data to CodeCov
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        name: eunit
+        file: "./cover/cover.ct.xml"
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: elixir:1.14.2
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cache/rebar3
+          _build
+        key: ${{ runner.os }}-erlang-${{ env.OTP_VERSION }}-${{ hashFiles('**/*rebar.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-erlang-${{ env.OTP_VERSION }}-
+
+    - name: Compile
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        make compile
+
+    - name: erlfmt check
+      run: make erlfmt_check
+
+    - name: Dialyze
+      run: make dialyze

@@ -1,2 +1,9 @@
-# erlds
-Erlang wrapper for GCP Datastore
+erlds
+=====
+
+An OTP library
+
+Build
+-----
+
+    $ ./rebar3 compile
