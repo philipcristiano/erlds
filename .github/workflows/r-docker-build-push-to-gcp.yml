@@ -1,0 +1,76 @@
+name: Docker Build and Push to Environment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+
+    secrets:
+      DEPLOYER_SA_EMAIL:
+        required: true
+      GCP_REGION:
+        required: false
+      GCP_PROJECT_ID:
+        required: true
+      WORKLOAD_IDP:
+        required: true
+    outputs:
+      image_url:
+        description: Image URL for environment
+        value: ${{ jobs.build.outputs.image_url }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_url: ${{ steps.values.outputs.image_url }}
+
+    # Add "id-token" with the intended permissions.
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    env:
+      IMAGE_URL: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/bizops/app:${{ github.sha }}
+
+    steps:
+    - uses: 'actions/checkout@v3'
+
+    - id: 'values'
+      run: |
+        echo "image_url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        token_format: "access_token"
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDP }}
+        service_account: ${{ secrets.DEPLOYER_SA_EMAIL }}
+
+    # Log in to Docker
+    - uses: 'docker/login-action@v1'
+      with:
+        registry: 'gcr.io' # or REGION-docker.pkg.dev
+        username: 'oauth2accesstoken'
+        password: '${{ steps.auth.outputs.access_token }}'
+
+    # Log in to artifact registry
+    - run: |-
+        echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://${{ secrets.GCP_REGION }}-docker.pkg.dev
+
+    - name: Build
+      uses: docker/build-push-action@v3
+      with:
+        push: true
+        tags: ${{ env.IMAGE_URL }}
+        context: .
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

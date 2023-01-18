@@ -1,0 +1,12 @@
+name: Main Branch Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  erlang:
+    uses: ./.github/workflows/r-erlang.yml
+    secrets: inherit
