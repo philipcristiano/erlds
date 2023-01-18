@@ -43,18 +43,11 @@ jobs:
         make test
         ./rebar3 codecov analyze path="_build/test/cover"
 
-
-    - name: Upload eunit test coverage data to CodeCov
+    - name: Upload coverage data to CodeCov
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         name: eunit
-
-    - name: Upload CT test coverage data to CodeCov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        name: ct
 
   lint:
     runs-on: ubuntu-latest
