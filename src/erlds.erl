@@ -242,8 +242,7 @@ value_to_ds_prop(_PartitionID, {{Y, Mo, D}, {H, Mi, S}}) ->
 value_to_ds_prop(PartitionID, V = [{_Kind, _ID} | _T]) ->
     Path = path_to_ds_path(V),
     #{
-        keyValue => #{path => Path},
-        partitionId => PartitionID
+        keyValue => #{path => Path, partitionId => PartitionID}
     };
 value_to_ds_prop(_PartitionID, V) when is_integer(V) ->
     #{integerValue => V}.
@@ -341,4 +340,7 @@ key(Partition, Path) ->
     Key.
 
 partitionId(ID) ->
-    #{namespaceId => ID}.
+    #{
+        namespaceId => ID,
+        projectId => erlds_config:gcp_project_id()
+    }.

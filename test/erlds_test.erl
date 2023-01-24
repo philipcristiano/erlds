@@ -8,10 +8,12 @@
 put_item_test() ->
     erlds_meck:load(?MOCK_MODS),
     PartitionID = <<"test_partition_id">>,
+    ProjectID = <<"test_project_id">>,
     Path = [{<<"kind">>, <<"id">>}],
     Values = #{key => <<"value">>},
 
     ok = meck:expect(erlds_lib, mutate, ['_'], {ok, undefined}),
+    ok = meck:expect(erlds_config, gcp_project_id, [], ProjectID),
 
     ok = ?MUT:put_item(PartitionID, Path, Values),
 
@@ -43,6 +45,7 @@ get_item_test() ->
     erlds_meck:load(?MOCK_MODS),
 
     PartitionID = <<"test_partition_id">>,
+    ProjectID = <<"test_project_id">>,
     Path = [{<<"kind">>, <<"id">>}],
     % Values = #{key => <<"value">>},
     Return = #{
@@ -60,6 +63,7 @@ get_item_test() ->
     },
 
     ok = meck:expect(erlds_lib, lookup, ['_'], {ok, Return}),
+    ok = meck:expect(erlds_config, gcp_project_id, [], ProjectID),
 
     {ok, Item} = ?MUT:get_item(PartitionID, Path),
 
