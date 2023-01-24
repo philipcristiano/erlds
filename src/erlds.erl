@@ -66,7 +66,8 @@ put_item(Partition, Path, Values, #{mutation := Mut}) ->
         message => put_item,
         key => Key
     }),
-    Props = map_to_ds_props(Values),
+    PartitionID = partitionId(Partition),
+    Props = map_to_ds_props(PartitionID, Values),
     Entity = #{key => Key, properties => Props},
     Mutation = #{Mut => Entity},
 
@@ -106,7 +107,7 @@ query_kind_by_ancestor(Partition, Kind, AncestorKey, _Limit) ->
             <<" WHERE __key__ HAS ANCESTOR @org_key\n">>/binary>>,
 
     Args = #{<<"org_key">> => AncestorKey, limit => 50},
-    NamedBindings = args_to_named_bindings(Args),
+    NamedBindings = args_to_named_bindings(PartitionID, Args),
 
     {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
@@ -147,7 +148,7 @@ query_kind_by_ancestor_and_properties(Partition, Kind, AncestorKey, Properties, 
         args => Args
     }),
 
-    NamedBindings = args_to_named_bindings(Args),
+    NamedBindings = args_to_named_bindings(PartitionID, Args),
 
     {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
@@ -173,7 +174,7 @@ query_kind_by_properties(Partition, Kind, Properties, Limit) ->
         args => Args
     }),
 
-    NamedBindings = args_to_named_bindings(Args),
+    NamedBindings = args_to_named_bindings(PartitionID, Args),
 
     {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
@@ -184,10 +185,10 @@ query_kind_by_properties(Partition, Kind, Properties, Limit) ->
 
     {ok, Objs}.
 
-args_to_named_bindings(Args) ->
+args_to_named_bindings(PartitionID, Args) ->
     maps:map(
         fun(_K, Val) ->
-            #{value => value_to_ds_prop(Val)}
+            #{value => value_to_ds_prop(PartitionID, Val)}
         end,
         Args
     ).
@@ -212,15 +213,15 @@ pl_key_to_atom({K, V}) when is_binary(K) ->
 path_to_ds_path(P) ->
     lists:map(fun path_item_to_ds/1, P).
 
-map_to_ds_props(M) ->
-    maps:map(fun(_K, V) -> value_to_ds_prop(V) end, M).
+map_to_ds_props(PartitionID, M) ->
+    maps:map(fun(_K, V) -> value_to_ds_prop(PartitionID, V) end, M).
 
-value_to_ds_prop({b, V}) when is_binary(V) ->
+value_to_ds_prop(_PartitionID, {b, V}) when is_binary(V) ->
     EncodedValue = base64:encode(V),
     #{blobValue => EncodedValue, excludeFromIndexes => true};
-value_to_ds_prop(V) when is_binary(V) ->
+value_to_ds_prop(_PartitionID, V) when is_binary(V) ->
     #{stringValue => V};
-value_to_ds_prop({{Y, Mo, D}, {H, Mi, S}}) ->
+value_to_ds_prop(_PartitionID, {{Y, Mo, D}, {H, Mi, S}}) ->
     #{
         timestampValue => #{
             '__struct__' => 'Elixir.DateTime',
@@ -238,10 +239,12 @@ value_to_ds_prop({{Y, Mo, D}, {H, Mi, S}}) ->
             zone_abbr => <<"UTC">>
         }
     };
-value_to_ds_prop(V = [{_Kind, _ID} | _T]) ->
+value_to_ds_prop(PartitionID, V = [{_Kind, _ID} | _T]) ->
     Path = path_to_ds_path(V),
-    #{keyValue => #{path => Path}};
-value_to_ds_prop(V) when is_integer(V) ->
+    #{
+        keyValue => #{path => Path, partitionId => PartitionID}
+    };
+value_to_ds_prop(_PartitionID, V) when is_integer(V) ->
     #{integerValue => V}.
 
 path_item_to_ds({Kind, Name}) ->
@@ -337,4 +340,7 @@ key(Partition, Path) ->
     Key.
 
 partitionId(ID) ->
-    #{namespaceId => ID}.
+    #{
+        namespaceId => ID,
+        projectId => erlds_config:gcp_project_id()
+    }.
