@@ -20,7 +20,7 @@
 -export([
     lookup/1,
     mutate/1,
-    query/2
+    query/3
 ]).
 
 -define(GOTH_TOKEN, 'Elixir.Goth.Token').
@@ -49,9 +49,9 @@ lookup(LookupRequest) ->
         ?GOOGLE_API:datastore_projects_lookup(Conn, ProjectID, [{body, LookupRequest}], [])
     end).
 
-query(Query, NamedBindings) ->
+query(PartitionID, Query, NamedBindings) ->
     GQLQuery = #{queryString => Query, named_bindings => NamedBindings, allow_literals => true},
-    Request = #{gqlQuery => GQLQuery},
+    Request = #{gqlQuery => GQLQuery, partitionId => PartitionID},
     ?LOG_DEBUG(#{
         message => q_query,
         named_binding => NamedBindings,
