@@ -17,18 +17,17 @@
 -include_lib("kernel/include/logger.hrl").
 -include_lib("opentelemetry_api/include/otel_tracer.hrl").
 
--export([ensure_table/4]).
 -export([
-    delete_item/1,
-    batch_get_items/1,
+    delete_item/2,
+    batch_get_items/2,
     new_id/0,
     id_to_binary/1,
-    get_item/1,
-    put_item/2,
+    get_item/2,
     put_item/3,
-    query_kind_by_ancestor/3,
-    query_kind_by_ancestor_and_properties/4,
-    query_kind_by_properties/3
+    put_item/4,
+    query_kind_by_ancestor/4,
+    query_kind_by_ancestor_and_properties/5,
+    query_kind_by_properties/4
 ]).
 
 -export([
@@ -41,9 +40,9 @@
 -define(DATASTORE_CONNECTION, 'Elixir.GoogleApi.Datastore.V1.Connection').
 -define(GOOGLE_API, 'Elixir.GoogleApi.Datastore.V1.Api.Projects').
 
--spec delete_item(list()) -> ok.
-delete_item(Path) ->
-    Key = #{path => path_to_ds_path(Path)},
+-spec delete_item(binary(), list()) -> ok.
+delete_item(Partition, Path) ->
+    Key = key(Partition, Path),
     ?LOG_DEBUG(#{
         message => delete_item,
         key => Key
@@ -54,18 +53,15 @@ delete_item(Path) ->
         {ok, _} -> ok
     end.
 
-ensure_table(_Name, _Attrs, _KeySchema, _Opts) ->
-    ok.
-
--spec put_item(list({binary(), binary()}), map()) -> ok | {error, already_exists}.
-put_item(Path, Values) ->
+-spec put_item(binary(), list({binary(), binary()}), map()) -> ok | {error, already_exists}.
+put_item(Partition, Path, Values) ->
     ?with_span(<<"lookup">>, #{}, fun(_Ctx) ->
-        put_item(Path, Values, #{mutation => upsert})
+        put_item(Partition, Path, Values, #{mutation => upsert})
     end).
 
--spec put_item(list({binary(), binary()}), map(), map()) -> ok | {error, already_exists}.
-put_item(Path, Values, #{mutation := Mut}) ->
-    Key = #{path => path_to_ds_path(Path)},
+-spec put_item(binary(), list({binary(), binary()}), map(), map()) -> ok | {error, already_exists}.
+put_item(Partition, Path, Values, #{mutation := Mut}) ->
+    Key = key(Partition, Path),
     ?LOG_DEBUG(#{
         message => put_item,
         key => Key
@@ -79,8 +75,8 @@ put_item(Path, Values, #{mutation := Mut}) ->
         {error, #{status := 409}} -> {error, already_exists}
     end.
 
-batch_get_items(Paths) ->
-    Keys = lists:map(fun(Path) -> #{path => path_to_ds_path(Path)} end, Paths),
+batch_get_items(Partition, Paths) ->
+    Keys = lists:map(fun(Path) -> key(Partition, Path) end, Paths),
     ?LOG_DEBUG(#{
         message => batch_get_item,
         keys => Keys
@@ -91,19 +87,20 @@ batch_get_items(Paths) ->
         {ok, LookupResponse} -> lookup_resp_to_obj(LookupResponse)
     end.
 
--spec get_item(list()) -> {ok, map()} | not_found.
-get_item(Path) ->
+-spec get_item(binary(), list()) -> {ok, map()} | not_found.
+get_item(Partition, Path) ->
     ?LOG_DEBUG(#{
         message => get_item,
         path => Path
     }),
 
-    case batch_get_items([Path]) of
+    case batch_get_items(Partition, [Path]) of
         {ok, [Item]} -> {ok, Item};
         {ok, []} -> not_found
     end.
 
-query_kind_by_ancestor(Kind, AncestorKey, _Limit) ->
+query_kind_by_ancestor(Partition, Kind, AncestorKey, _Limit) ->
+    PartitionID = partitionId(Partition),
     Query =
         <<<<"SELECT * FROM ">>/binary, Kind/binary,
             <<" WHERE __key__ HAS ANCESTOR @org_key\n">>/binary>>,
@@ -111,7 +108,7 @@ query_kind_by_ancestor(Kind, AncestorKey, _Limit) ->
     Args = #{<<"org_key">> => AncestorKey, limit => 50},
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];
@@ -134,7 +131,8 @@ build_equality_conditionals(Properties) ->
     Statement = erlang:iolist_to_binary(AndedEqualities),
     Statement.
 
-query_kind_by_ancestor_and_properties(Kind, AncestorKey, Properties, _Limit) ->
+query_kind_by_ancestor_and_properties(Partition, Kind, AncestorKey, Properties, _Limit) ->
+    PartitionID = partitionId(Partition),
     Select =
         <<<<"SELECT * FROM ">>/binary, Kind/binary,
             <<" WHERE __key__ HAS ANCESTOR @org_key AND ">>/binary>>,
@@ -151,7 +149,7 @@ query_kind_by_ancestor_and_properties(Kind, AncestorKey, Properties, _Limit) ->
 
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];
@@ -160,7 +158,8 @@ query_kind_by_ancestor_and_properties(Kind, AncestorKey, Properties, _Limit) ->
 
     {ok, Objs}.
 
-query_kind_by_properties(Kind, Properties, Limit) ->
+query_kind_by_properties(Partition, Kind, Properties, Limit) ->
+    PartitionID = partitionId(Partition),
     Select =
         <<<<"SELECT * FROM ">>/binary, Kind/binary, <<" WHERE ">>/binary>>,
     Conditionals = build_equality_conditionals(Properties),
@@ -176,7 +175,7 @@ query_kind_by_properties(Kind, Properties, Limit) ->
 
     NamedBindings = args_to_named_bindings(Args),
 
-    {ok, EntityResults} = erlds_lib:query(Query, NamedBindings),
+    {ok, EntityResults} = erlds_lib:query(PartitionID, Query, NamedBindings),
     Objs =
         case EntityResults of
             nil -> [];
@@ -328,3 +327,14 @@ not_nil(nil) ->
     false;
 not_nil(_) ->
     true.
+
+key(Partition, Path) ->
+    PartitionID = partitionId(Partition),
+    Key = #{
+        partitionId => PartitionID,
+        path => path_to_ds_path(Path)
+    },
+    Key.
+
+partitionId(ID) ->
+    #{namespaceId => ID}.
